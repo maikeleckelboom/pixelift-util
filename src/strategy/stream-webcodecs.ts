@@ -1,5 +1,5 @@
 import { streamToBlob } from '@/utils/stream-to-blob';
-import { webCodecsDecoder } from './webcodecs';
+import { WebCodecsDecoder } from './webcodecs';
 import type {
   DecodeOptions,
   Decoder,
@@ -13,20 +13,15 @@ export const streamWebCodecsDecoder: Decoder = {
   async decode(
     input: DecoderInput,
     options: DecodeOptions = {},
-  ): Promise<PixelData> {
-    if (!(input instanceof ReadableStream) && !(input instanceof Blob)) {
-      throw new TypeError('Input must be a ReadableStream');
-    }
-
+  ): Promise<PixelData | PixelData[]> {
     const blob = await streamToBlob(input, {
       signal: options.signal,
       type: options.type,
       onProgress: (v) => console.log(v),
     });
 
-    return webCodecsDecoder.decode(blob, options);
+    return WebCodecsDecoder.decode(blob, options);
   },
 
-  isSupported: (type?: string) =>
-    webCodecsDecoder.isSupported?.(type ?? '') ?? false,
+  isSupported: (type?: string) => WebCodecsDecoder.isSupported(type),
 };

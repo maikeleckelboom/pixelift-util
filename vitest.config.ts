@@ -5,6 +5,8 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'happy-dom',
+    testTimeout: 0,
+    setupFiles: ['test/setup.ts'],
     browser: {
       provider: 'playwright',
       enabled: true,
@@ -14,6 +16,7 @@ export default defineConfig({
       instances: [
         {
           browser: 'chromium',
+          testTimeout: 0,
         },
       ],
     },

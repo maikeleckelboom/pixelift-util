@@ -1,105 +1,195 @@
-import type { DecodeOptions, Decoder, PixelData } from '@/core/types';
+import type {
+  DecodeAnimationOptions,
+  DecodeOptions,
+  Decoder,
+  DecoderInput,
+  FrameConversionOptions,
+  PixelData,
+} from '@/core/types';
 import { createError } from '@/shared/error';
+import { decodeFramesProgressively } from '@/utils/decode-frames-progressively';
+import { toReadableStream } from '@/utils/to-readable-stream';
 
-/**
- * Convert various image buffer sources into a readable stream,
- * as required by ImageDecoder.
- */
-function toReadableStream(
-  input: ImageBufferSource | Blob,
-  type: string,
-): ReadableStream<Uint8Array> {
-  if (input instanceof Blob) {
-    return input.stream();
-  }
+export class WebCodecsDecoder implements Decoder {
+  public readonly name = 'webcodecs';
 
-  if (input instanceof ReadableStream) {
-    return input;
-  }
-
-  try {
-    return new Blob([input], { type }).stream();
-  } catch (err) {
-    throw createError.invalidInput(
-      'Non-streamable input for WebCodecs decoding',
-      input,
-    );
-  }
-}
-
-export const webCodecsDecoder: Decoder = {
-  name: 'webcodecs',
-
-  async decode(
-    input: Blob | ImageBufferSource,
+  static async decode(
+    input: DecoderInput,
     options?: DecodeOptions,
   ): Promise<PixelData> {
-    const isBlob = input instanceof Blob;
-    const type = options?.type ?? (isBlob ? input.type : undefined);
+    const decoder = new WebCodecsDecoder();
+    return decoder.decode(input, options);
+  }
 
-    if (!type) {
-      throw createError.invalidInput(
-        'Missing MIME type for image decoding',
-        input,
-      );
-    }
+  public async decode(
+    input: DecoderInput,
+    options?: DecodeOptions,
+  ): Promise<PixelData> {
+    const { decoder } = await this.initDecoder(input, options);
+    let frame: VideoFrame | null = null;
 
-    if (
-      !ImageDecoder.isTypeSupported ||
-      !(await ImageDecoder.isTypeSupported(type))
-    ) {
-      throw createError.invalidOption(`MIME type not supported: ${type}`);
-    }
+    try {
+      options?.signal?.throwIfAborted();
 
-    const data = toReadableStream(input, type);
-    const decoder = new ImageDecoder({ type, data });
+      const track = decoder.tracks.selectedTrack!;
+      const frameIndex = options?.frameIndex ?? 0;
 
-    const { image: frame } = await decoder.decode({
-      frameIndex: 0,
-      completeFramesOnly: true,
-    });
+      if (frameIndex < 0 || frameIndex >= track.frameCount) {
+        throw createError.invalidOption(
+          `Frame index ${frameIndex} out of range (0-${track.frameCount - 1})`,
+        );
+      }
 
-    if (options?.signal?.aborted) {
-      decoder.close();
-      throw createError.aborted('Decoding aborted', input);
-    }
+      const result = await decoder.decode({
+        frameIndex,
+        completeFramesOnly: !!options?.completeFramesOnly,
+      });
 
-    if (!frame || frame.codedWidth === 0 || frame.codedHeight === 0) {
+      frame = result.image;
+
+      options?.signal?.throwIfAborted();
+
+      if (!frame?.codedWidth || !frame?.codedHeight) {
+        throw createError.decodingFailed(
+          'Decoded frame has invalid dimensions',
+        );
+      }
+
+      return await this.frameToPixelData(frame);
+    } finally {
       frame?.close();
       decoder.close();
-      throw createError.invalidInput(
-        !frame
-          ? 'No image frame returned'
-          : 'Invalid image dimensions for WebCodecs decoding',
-        input,
+    }
+  }
+
+  public async *decodeAnimation(
+    input: DecoderInput,
+    options?: DecodeAnimationOptions,
+  ): AsyncGenerator<PixelData, void, undefined> {
+    const { decoder, determinedType } = await this.initDecoder(input, options);
+
+    try {
+      options?.signal?.throwIfAborted();
+
+      const track = decoder.tracks.selectedTrack!;
+      if (!track.animated) {
+        throw createError.runtimeError(
+          'Requested animation decoding for non-animated track',
+          { mimeType: determinedType },
+        );
+      }
+
+      yield* decodeFramesProgressively(decoder, options);
+    } finally {
+      decoder.close();
+    }
+  }
+
+  public static isSupported(
+    mimeType: string | undefined,
+  ): boolean | Promise<boolean> {
+    if (!mimeType || typeof ImageDecoder === 'undefined') return false;
+    return ImageDecoder.isTypeSupported(mimeType);
+  }
+
+  private async frameToPixelData(
+    frame: VideoFrame,
+    options?: FrameConversionOptions,
+  ): Promise<PixelData> {
+    const format = options?.format || 'RGBA';
+    const colorSpace = options?.colorSpace || 'srgb';
+
+    try {
+      const byteLength = frame.allocationSize({ format });
+      const dataBuffer = new Uint8ClampedArray(byteLength);
+
+      await frame.copyTo(dataBuffer, {
+        format,
+        colorSpace,
+      });
+
+      return {
+        width: frame.codedWidth,
+        height: frame.codedHeight,
+        data: dataBuffer,
+      };
+    } catch (error) {
+      throw createError.runtimeError(
+        `Failed to convert frame to PixelData: ${error instanceof Error ? error.message : String(error)}`,
+        {
+          format,
+          colorSpace,
+          frameDimensions: `${frame.codedWidth}x${frame.codedHeight}`,
+        },
+      );
+    }
+  }
+
+  private async initDecoder(
+    input: DecoderInput,
+    options?: DecodeOptions,
+  ): Promise<{ decoder: ImageDecoder; determinedType: string }> {
+    options?.signal?.throwIfAborted();
+
+    if (!input) {
+      throw createError.invalidOption('Input cannot be null or undefined');
+    }
+
+    if (typeof ImageDecoder === 'undefined') {
+      throw createError.runtimeError(
+        'WebCodecs ImageDecoder API is unavailable',
       );
     }
 
-    const byteLength = frame.allocationSize({ format: 'RGBA' });
-    const dataBuffer = new Uint8ClampedArray(byteLength);
+    const determinedType =
+      options?.type || (input instanceof Blob ? input.type : undefined);
+    if (!determinedType) {
+      throw createError.invalidOption(
+        'MIME type required for decoding. Provide via options.type or use a typed Blob',
+      );
+    }
 
-    await frame.copyTo(dataBuffer, {
-      format: 'RGBA',
-      colorSpace: 'srgb',
+    let isSupported: boolean;
+    try {
+      isSupported = await ImageDecoder.isTypeSupported(determinedType);
+    } catch (error) {
+      throw createError.invalidInput('A valid MIME type', determinedType);
+    }
+
+    if (!isSupported) {
+      throw createError.invalidOption(
+        `Unsupported MIME type: ${determinedType}`,
+      );
+    }
+
+    const dataStream = toReadableStream(input, determinedType);
+    const decoder = new ImageDecoder({
+      type: determinedType,
+      data: dataStream,
+      preferAnimation: !!options?.prefersAnimation,
     });
 
-    const result: PixelData = {
-      width: frame.codedWidth,
-      height: frame.codedHeight,
-      data: dataBuffer,
-    };
+    try {
+      await decoder.tracks.ready;
+    } catch (error) {
+      decoder.close();
+      throw createError.decodingFailed(
+        determinedType,
+        `Decoder initialization failed: ${error instanceof Error ? error.message : String(error)}`,
+        error,
+      );
+    }
 
-    frame.close();
-    decoder.close();
+    options?.signal?.throwIfAborted();
 
-    return result;
-  },
+    if (!decoder.tracks.selectedTrack) {
+      decoder.close();
+      throw createError.decodingFailed(
+        determinedType,
+        'No selected track available for decoding',
+      );
+    }
 
-  isSupported(mime: string): boolean | Promise<boolean> {
-    return (
-      typeof ImageDecoder !== 'undefined' &&
-      typeof ImageDecoder.isTypeSupported === 'function' &&
-      ImageDecoder.isTypeSupported(mime)
-    );
-  },
-};
+    return { decoder, determinedType };
+  }
+}

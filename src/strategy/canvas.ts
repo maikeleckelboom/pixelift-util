@@ -1,6 +1,6 @@
 import type { Decoder, PixelData } from '@/core/types';
-import { toBlob } from '@/utils/to-blob';
 import { createError } from '@/shared/error';
+import { toBlob } from '@/utils/to-blob';
 
 export function createOffscreenDrawingSurface(
   width: number,
