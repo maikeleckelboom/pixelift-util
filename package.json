@@ -2,6 +2,7 @@
   "name": "pixelift-util",
   "module": "src/index.ts",
   "type": "module",
+  "types": "src/index.ts",
   "scripts": {
     "test": "vitest",
     "dev": "vitest --watch"

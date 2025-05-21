@@ -1,5 +1,5 @@
 import { getAllDecoders, getDecoder } from "./registry";
-import { DecodeOptions, DecodedImage } from "./types";
+import type { DecodeOptions, DecodedImage } from "./types";
 
 export async function decodeWith(
     strategyName: string,

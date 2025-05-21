@@ -6,11 +6,11 @@ export default defineConfig({
         globals: true,
         environment: 'happy-dom',
         browser: {
+            provider: "playwright",
             enabled: true,
             headless: true,
-            provider: "playwright",
-            name: 'chromium',
-            isolate: false, // Disable isolation to help with module resolution
+            screenshotFailures: false,
+            isolate: false,
             instances: [
                 {
                     browser: 'chromium',
@@ -21,9 +21,4 @@ export default defineConfig({
             '@': path.resolve(__dirname, './src')
         }
     },
-    resolve: {
-        alias: {
-            '@': path.resolve(__dirname, './src')
-        }
-    }
 });

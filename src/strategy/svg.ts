@@ -1,4 +1,4 @@
-import { Decoder } from "@/core/types";
+import type { Decoder } from "@/core/types";
 import { sanitizeSvg } from "@/utils/sanitizeSvg";
 
 export const svgDecoder: Decoder = {

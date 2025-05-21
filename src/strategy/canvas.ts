@@ -1,4 +1,4 @@
-import { Decoder } from "@/core/types";
+import type { Decoder } from "@/core/types";
 import { toBlob } from "@/utils/toBlob";
 
 export const canvasDecoder: Decoder = {
