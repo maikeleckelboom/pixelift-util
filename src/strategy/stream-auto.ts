@@ -1,23 +1,21 @@
-// src/strategy/stream-auto.ts
-import { registerDecoder } from "@/core/registry";
-import { streamToBlob } from "@/utils/streamToBlob";
-import { decodeWith, autoDecode } from "@/core/decode";
-import type { DecodeOptions, DecodedImage, Decoder } from "@/core/types";
+import { streamToBlob } from '@/utils/stream-to-blob';
+import { decode } from '@/core/decode';
+import type { DecodeOptions, Decoder, PixelData } from '@/core/types';
+import { createError } from '@/shared/error';
 
 export const streamAutoDecoder: Decoder = {
-    name: "stream-auto",
-    async decode(input, options: DecodeOptions = {}): Promise<DecodedImage> {
-        // 1. Convert the incoming ReadableStream into a Blob
-        const blob = await streamToBlob(
-            input as ReadableStream<Uint8Array>,
-            { signal: options.signal, type: options.type }
-        );
+  name: 'stream-auto',
+  async decode(input, options: DecodeOptions = {}): Promise<PixelData> {
+    if (!(input instanceof ReadableStream)) {
+      throw createError.invalidInput('ReadableStream', input);
+    }
 
-        // 2. Delegate to your existing auto–decode logic
-        return autoDecode(blob, options);
-    },
-    isSupported: () => true,
+    const blob = await streamToBlob(input, {
+      signal: options.signal,
+      type: options.type,
+    });
+
+    return decode(blob, options);
+  },
+  isSupported: () => true,
 };
-
-// Register it
-registerDecoder(streamAutoDecoder);

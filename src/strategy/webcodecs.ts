@@ -1,80 +1,105 @@
-// src/strategy/webcodecs.ts
+import type { DecodeOptions, Decoder, PixelData } from '@/core/types';
+import { createError } from '@/shared/error';
 
-import type { Decoder, DecodedImage } from "../core/types";
+/**
+ * Convert various image buffer sources into a readable stream,
+ * as required by ImageDecoder.
+ */
+function toReadableStream(
+  input: ImageBufferSource | Blob,
+  type: string,
+): ReadableStream<Uint8Array> {
+  if (input instanceof Blob) {
+    return input.stream();
+  }
+
+  if (input instanceof ReadableStream) {
+    return input;
+  }
+
+  try {
+    return new Blob([input], { type }).stream();
+  } catch (err) {
+    throw createError.invalidInput(
+      'Non-streamable input for WebCodecs decoding',
+      input,
+    );
+  }
+}
 
 export const webCodecsDecoder: Decoder = {
-    name: "webcodecs",
+  name: 'webcodecs',
 
-    async decode(input): Promise<DecodedImage> {
-        // 1. Normalize input to Blob
-        const blob = input instanceof Blob
-            ? input
-            : await new Response(input).blob();
+  async decode(
+    input: Blob | ImageBufferSource,
+    options?: DecodeOptions,
+  ): Promise<PixelData> {
+    const isBlob = input instanceof Blob;
+    const type = options?.type ?? (isBlob ? input.type : undefined);
 
-        // 2. Determine MIME type (fallback to PNG)
-        const mime = blob.type || "image/png";
+    if (!type) {
+      throw createError.invalidInput(
+        'Missing MIME type for image decoding',
+        input,
+      );
+    }
 
-        // 3. Pull raw bytes
-        const buffer = await blob.arrayBuffer();
-        const decoder = new ImageDecoder({
-            data: new Uint8Array(buffer),
-            type: mime,
-        });
+    if (
+      !ImageDecoder.isTypeSupported ||
+      !(await ImageDecoder.isTypeSupported(type))
+    ) {
+      throw createError.invalidOption(`MIME type not supported: ${type}`);
+    }
 
-        // 4. Wait for decoder readiness
-        await decoder.tracks.ready;
+    const data = toReadableStream(input, type);
+    const decoder = new ImageDecoder({ type, data });
 
-        // 5. If `readable` exists, use the VideoFrame pipeline
-        if (decoder.readable?.getReader) {
-            const reader = decoder.readable.getReader();
-            const { value: frame } = await reader.read();
-            reader.releaseLock();
+    const { image: frame } = await decoder.decode({
+      frameIndex: 0,
+      completeFramesOnly: true,
+    });
 
-            if (!frame) {
-                throw new Error("No frame decoded");
-            }
+    if (options?.signal?.aborted) {
+      decoder.close();
+      throw createError.aborted('Decoding aborted', input);
+    }
 
-            // Extract true dimensions
-            const width  = frame.codedWidth;
-            const height = frame.codedHeight;
+    if (!frame || frame.codedWidth === 0 || frame.codedHeight === 0) {
+      frame?.close();
+      decoder.close();
+      throw createError.invalidInput(
+        !frame
+          ? 'No image frame returned'
+          : 'Invalid image dimensions for WebCodecs decoding',
+        input,
+      );
+    }
 
-            // Allocate buffer and copy pixels directly
-            const size = frame.allocationSize({ format: "RGBA" });
-            const data = new Uint8ClampedArray(size);
-            await frame.copyTo(data, { format: "RGBA", colorSpace: "srgb" });
+    const byteLength = frame.allocationSize({ format: 'RGBA' });
+    const dataBuffer = new Uint8ClampedArray(byteLength);
 
-            // Cleanup and return
-            frame.close();
-            decoder.close();
+    await frame.copyTo(dataBuffer, {
+      format: 'RGBA',
+      colorSpace: 'srgb',
+    });
 
-            return { width, height, data, type: mime };
-        }
+    const result: PixelData = {
+      width: frame.codedWidth,
+      height: frame.codedHeight,
+      data: dataBuffer,
+    };
 
-        // 6. Fallback: decode to ImageBitmap + draw on OffscreenCanvas
-        const { image: bitmap } = await decoder.decode();
-        const width  = bitmap.width;
-        const height = bitmap.height;
+    frame.close();
+    decoder.close();
 
-        const canvas = new OffscreenCanvas(width, height);
-        const ctx    = canvas.getContext("2d");
-        if (!ctx) {
-            throw new Error("2D context not available");
-        }
+    return result;
+  },
 
-        ctx.drawImage(bitmap, 0, 0);
-        const imageData = ctx.getImageData(0, 0, width, height);
-
-        decoder.close();
-        return {
-            width,
-            height,
-            data: imageData.data,
-            type: mime,
-        };
-    },
-
-    isSupported(mime) {
-        return typeof ImageDecoder !== "undefined"
-            && ImageDecoder.isTypeSupported?.(mime);
-    },
+  isSupported(mime: string): boolean | Promise<boolean> {
+    return (
+      typeof ImageDecoder !== 'undefined' &&
+      typeof ImageDecoder.isTypeSupported === 'function' &&
+      ImageDecoder.isTypeSupported(mime)
+    );
+  },
 };

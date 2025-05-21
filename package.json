@@ -2,22 +2,28 @@
   "name": "pixelift-util",
   "module": "src/index.ts",
   "type": "module",
-  "types": "src/index.ts",
+  "private": true,
+  "engines": {
+    "npm": ">=9.0.0",
+    "bun": ">=1.0.0",
+    "node": ">= 18.0.0"
+  },
   "scripts": {
     "test": "vitest",
-    "dev": "vitest --watch"
+    "dev": "vitest --watch",
+    "test:browser": "vitest --workspace=vitest.workspace.ts",
+    "format": "prettier --write ."
   },
   "devDependencies": {
     "@types/bun": "latest",
     "@vitest/browser": "^3.1.4",
     "happy-dom": "^17.4.7",
     "playwright": "^1.52.0",
+    "prettier": "^3.5.3",
+    "typescript": "^5.8.3",
     "vitest": "^3.1.4"
   },
-  "peerDependencies": {
-    "typescript": "^5"
-  },
-  "dependencies": {
-    "vite": "^6.3.5"
+  "optionalDependencies": {
+    "file-type": "^20.5.0"
   }
 }

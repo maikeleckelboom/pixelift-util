@@ -1,4 +1,4 @@
-# pixelift-util
+# decode-util
 
 ## Supported Image Formats
 
@@ -8,6 +8,7 @@
 - ❌ WebP (if ImageDecoder unavailable)
 
 ---
+
 To install dependencies:
 
 ```bash

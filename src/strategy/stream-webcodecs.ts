@@ -1,25 +1,32 @@
-// src/strategy/stream-webcodecs.ts
-import { registerDecoder } from "@/core/registry";
-import { streamToBlob } from "@/utils/streamToBlob";
-import { webCodecsDecoder } from "./webcodecs";
-import type { DecodeOptions, DecodedImage, Decoder } from "@/core/types";
+import { streamToBlob } from '@/utils/stream-to-blob';
+import { webCodecsDecoder } from './webcodecs';
+import type {
+  DecodeOptions,
+  Decoder,
+  DecoderInput,
+  PixelData,
+} from '@/core/types';
 
 export const streamWebCodecsDecoder: Decoder = {
-    name: "stream-webcodecs",
-    async decode(input, options: DecodeOptions = {}): Promise<DecodedImage> {
-        // 1. Convert stream → Blob
-        const blob = await streamToBlob(
-            input as ReadableStream<Uint8Array>,
-            { signal: options.signal, type: options.type }
-        );
+  name: 'stream-webcodecs',
 
-        // 2. Delegate to your WebCodecs decoder directly
-        return webCodecsDecoder.decode(blob, options);
-    },
-    isSupported: (mime?: string) =>
-        // only advertise support if WebCodecs itself supports the type
-        webCodecsDecoder.isSupported?.(mime ?? "") ?? false,
+  async decode(
+    input: DecoderInput,
+    options: DecodeOptions = {},
+  ): Promise<PixelData> {
+    if (!(input instanceof ReadableStream) && !(input instanceof Blob)) {
+      throw new TypeError('Input must be a ReadableStream');
+    }
+
+    const blob = await streamToBlob(input, {
+      signal: options.signal,
+      type: options.type,
+      onProgress: (v) => console.log(v),
+    });
+
+    return webCodecsDecoder.decode(blob, options);
+  },
+
+  isSupported: (type?: string) =>
+    webCodecsDecoder.isSupported?.(type ?? '') ?? false,
 };
-
-// Register it
-registerDecoder(streamWebCodecsDecoder);

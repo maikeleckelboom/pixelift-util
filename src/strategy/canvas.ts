@@ -1,21 +1,34 @@
-import type { Decoder } from "@/core/types";
-import { toBlob } from "@/utils/toBlob";
+import type { Decoder, PixelData } from '@/core/types';
+import { toBlob } from '@/utils/to-blob';
+import { createError } from '@/shared/error';
+
+export function createOffscreenDrawingSurface(
+  width: number,
+  height: number,
+): [OffscreenCanvas, OffscreenCanvasRenderingContext2D] {
+  const canvas = new OffscreenCanvas(width, height);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw createError.runtimeError('Failed to create canvas context');
+  return [canvas, ctx];
+}
 
 export const canvasDecoder: Decoder = {
-    name: "canvas",
+  name: 'canvas',
 
-    async decode(input): Promise<DecodedImage> {
-        const blob = await toBlob(input);
-        const bitmap = await createImageBitmap(blob);
-        const { width, height } = bitmap;
+  async decode(input): Promise<PixelData> {
+    const blob = await toBlob(input);
+    const bitmap = await createImageBitmap(blob);
+    const { width, height } = bitmap;
 
-        const canvas = new OffscreenCanvas(width, height);
-        const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
-        ctx.drawImage(bitmap, 0, 0);
+    const [, ctx] = createOffscreenDrawingSurface(width, height);
 
-        const { data } = ctx.getImageData(0, 0, width, height);
-        return { data, width, height, type: blob.type };
-    },
+    ctx.drawImage(bitmap, 0, 0);
+    const { data } = ctx.getImageData(0, 0, width, height);
 
-    isSupported: () => true
+    return { data, width, height };
+  },
+
+  isSupported: () => {
+    return typeof OffscreenCanvas !== 'undefined' && !!createImageBitmap;
+  },
 };
