@@ -1,4 +1,4 @@
-import type {Decoder} from "./types.ts";
+import type {Decoder} from "./types";
 
 const registry = new Map<string, Decoder>();
 

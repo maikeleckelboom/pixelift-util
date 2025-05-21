@@ -1,5 +1,13 @@
 # pixelift-util
 
+## Supported Image Formats
+
+- ✅ PNG, JPEG, AVIF (via WebCodecs)
+- ✅ SVG (sanitized & rendered)
+- ✅ GIF (first frame via Canvas/WebCodecs)
+- ❌ WebP (if ImageDecoder unavailable)
+
+---
 To install dependencies:
 
 ```bash

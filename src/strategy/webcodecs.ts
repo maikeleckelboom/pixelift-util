@@ -1,4 +1,4 @@
-import { Decoder, DecodedImage } from "@/core/types";
+import { Decoder, DecodedImage } from "../core/types";
 
 export const webCodecsDecoder: Decoder = {
     name: "webcodecs",
