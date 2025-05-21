@@ -1,7 +1,7 @@
 import { webCodecsDecoder } from "@/strategy/webcodecs.ts";
 import { registerDecoder } from "@/core/registry.ts";
 import { decodeWith } from "@/core/decode.ts";
-import { DecodedImage } from "./fixtures/helpers.ts";
+import type { DecodedImage, DecodeOptions } from "@/core/types.ts";
 import fixture from './fixtures/assets/test.png?url';
 
 beforeAll(() => {

@@ -1,8 +1,8 @@
 import { decodeWith } from "@/core/decode.ts";
 import { canvasDecoder } from "@/strategy/canvas.ts";
 import { registerDecoder } from "@/core/registry.ts";
-import { DecodedImage } from "./fixtures/helpers.ts";
 import fixture from './fixtures/assets/test.png?url';
+import type { DecodedImage, DecodeOptions } from "@/core/types.ts";
 
 beforeAll(() => {
     registerDecoder(canvasDecoder);
