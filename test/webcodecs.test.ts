@@ -1,8 +1,8 @@
 import { registerDecoder } from '@/core/registry';
 import { decodeWithStrategy } from '@/core/decode';
-import { streamWebCodecsDecoder } from '@/strategy/stream-webcodecs';
-import fixture from './fixtures/data/pixelift.png?url';
+import { StreamWebCodecsDecoder } from '@/strategy/stream-webcodecs';
 import { WebCodecsDecoder } from '@/strategy/webcodecs';
+import fixture from './fixtures/data/pixelift.png?url';
 
 let blob: Blob | null;
 let stream: ReadableStream<Uint8Array<ArrayBufferLike>> | null;
@@ -10,7 +10,7 @@ let buffer: ArrayBuffer | null;
 
 beforeAll(async () => {
   registerDecoder(new WebCodecsDecoder());
-  registerDecoder(streamWebCodecsDecoder);
+  registerDecoder(new StreamWebCodecsDecoder());
 
   blob = await fetch(fixture).then((res) => res.blob());
   stream = await fetch(fixture).then((res) => res.body);

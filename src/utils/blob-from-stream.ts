@@ -2,10 +2,32 @@ import { createError, PixeliftError } from '@/shared/error';
 import type { DecoderInput } from '@/core/types';
 
 export interface StreamToBlobOptions {
+  /**
+   * Optional AbortSignal to cancel the stream-to-blob conversion.
+   */
   signal?: AbortSignal;
-  type?: string;
+
+  /**
+   * MIME type for the resulting Blob (e.g., 'image/png', 'application/octet-stream').
+   * Defaults to 'application/octet-stream' if not provided.
+   */
+  mimeType?: string;
+
+  /**
+   * Maximum number of bytes to process before aborting with an error.
+   * If exceeded, a MaxBytesExceededError is thrown.
+   */
   maxBytes?: number;
+
+  /**
+   * Optional callback invoked with the number of bytes processed so far.
+   */
   onProgress?: (bytesProcessed: number) => void;
+
+  /**
+   * Optional size in bytes to control how large chunks should be when buffering.
+   * Can impact memory usage and progress reporting frequency.
+   */
   chunkSize?: number;
 }
 
@@ -22,21 +44,21 @@ function validate(
   }
 
   if (options.chunkSize !== undefined && options.chunkSize <= 0) {
-    throw createError.invalidOption('chunkSize must be positive');
+    throw createError.invalidOption('chunkSize must be a positive integer');
   }
 
   if (options.maxBytes !== undefined && options.maxBytes <= 0) {
-    throw createError.invalidOption('maxBytes must be positive');
+    throw createError.invalidOption('maxBytes must be a positive integer');
   }
 }
 
-export async function streamToBlob(
+export async function blobFromStream(
   stream: DecoderInput,
   options?: StreamToBlobOptions,
 ): Promise<Blob> {
   validate(stream, options);
 
-  const { signal, type, maxBytes, onProgress, chunkSize } = options || {};
+  const { signal, mimeType, maxBytes, onProgress, chunkSize } = options || {};
 
   if (signal?.aborted) {
     throw createError.aborted('Operation was already aborted');
@@ -47,20 +69,22 @@ export async function streamToBlob(
   let bytesProcessed = 0;
   let abortHandler: (() => void) | null = null;
 
-  let chunkBuffer: Uint8Array | null =
-    chunkSize && chunkSize > 0 ? new Uint8Array(chunkSize) : null;
+  let chunkBuffer: Uint8Array | null = chunkSize
+    ? new Uint8Array(chunkSize)
+    : null;
   let bufferOffset = 0;
 
   const updateProgress = () => {
-    if (!onProgress) return;
-    onProgress(bytesProcessed);
+    if (onProgress) {
+      onProgress(bytesProcessed);
+    }
   };
 
-  const checkSizeLimit = (prospectiveBytesToAdd: number) => {
-    if (maxBytes && bytesProcessed + prospectiveBytesToAdd > maxBytes) {
+  const checkSizeLimit = (nextChunkSize: number) => {
+    if (maxBytes && bytesProcessed + nextChunkSize > maxBytes) {
       throw createError.maxBytesExceeded(
         maxBytes,
-        bytesProcessed + prospectiveBytesToAdd,
+        bytesProcessed + nextChunkSize,
       );
     }
   };
@@ -75,7 +99,6 @@ export async function streamToBlob(
 
     while (true) {
       const readPromise = reader.read();
-
       const { done, value } = signal
         ? await Promise.race([readPromise, abortPromise])
         : await readPromise;
@@ -89,20 +112,20 @@ export async function streamToBlob(
           while (dataToProcess.byteLength > 0) {
             signal?.throwIfAborted();
 
-            const spaceInCurrentChunk = chunkBuffer.length - bufferOffset;
-            const sliceToCopy = dataToProcess.subarray(
+            const spaceRemaining = chunkBuffer.length - bufferOffset;
+            const copySlice = dataToProcess.subarray(
               0,
-              Math.min(dataToProcess.byteLength, spaceInCurrentChunk),
+              Math.min(dataToProcess.byteLength, spaceRemaining),
             );
 
-            chunkBuffer.set(sliceToCopy, bufferOffset);
-            bufferOffset += sliceToCopy.byteLength;
-            dataToProcess = dataToProcess.subarray(sliceToCopy.byteLength);
+            chunkBuffer.set(copySlice, bufferOffset);
+            bufferOffset += copySlice.byteLength;
+            dataToProcess = dataToProcess.subarray(copySlice.byteLength);
 
             if (bufferOffset === chunkBuffer.length) {
-              checkSizeLimit(chunkBuffer.byteLength);
+              checkSizeLimit(chunkBuffer.length);
               chunks.push(chunkBuffer);
-              bytesProcessed += chunkBuffer.byteLength;
+              bytesProcessed += chunkBuffer.length;
               updateProgress();
               chunkBuffer = new Uint8Array(chunkSize);
               bufferOffset = 0;
@@ -118,16 +141,16 @@ export async function streamToBlob(
     }
 
     if (chunkBuffer && bufferOffset > 0) {
-      const finalPartialChunk = chunkBuffer.subarray(0, bufferOffset);
-      checkSizeLimit(finalPartialChunk.byteLength);
-      chunks.push(finalPartialChunk);
-      bytesProcessed += finalPartialChunk.byteLength;
+      const remainder = chunkBuffer.subarray(0, bufferOffset);
+      checkSizeLimit(remainder.length);
+      chunks.push(remainder);
+      bytesProcessed += remainder.length;
       updateProgress();
     }
 
     signal?.throwIfAborted();
 
-    return new Blob(chunks, { type: type || 'application/octet-stream' });
+    return new Blob(chunks, { type: mimeType ?? 'application/octet-stream' });
   } catch (error) {
     if (
       reader &&
@@ -148,14 +171,11 @@ export async function streamToBlob(
   } finally {
     if (abortHandler && signal) {
       signal.removeEventListener('abort', abortHandler);
-      abortHandler = null;
     }
-    if (reader) {
-      try {
-        reader.releaseLock();
-      } catch {
-        /* ignore error */
-      }
+    try {
+      reader.releaseLock();
+    } catch {
+      // ignore
     }
   }
 }

@@ -12,10 +12,9 @@ export function createOffscreenDrawingSurface(
   return [canvas, ctx];
 }
 
-export const canvasDecoder: Decoder = {
-  name: 'canvas',
-
-  async decode(input): Promise<PixelData> {
+export class CanvasDecoder implements Decoder {
+  readonly name = 'canvas';
+  async decode(input: any): Promise<PixelData> {
     const blob = await toBlob(input);
     const bitmap = await createImageBitmap(blob);
     const { width, height } = bitmap;
@@ -26,9 +25,9 @@ export const canvasDecoder: Decoder = {
     const { data } = ctx.getImageData(0, 0, width, height);
 
     return { data, width, height };
-  },
+  }
 
-  isSupported: () => {
+  isSupported(): boolean {
     return typeof OffscreenCanvas !== 'undefined' && !!createImageBitmap;
-  },
-};
+  }
+}

@@ -1,16 +1,16 @@
 import { decodeWithStrategy } from '@/core/decode';
-import { canvasDecoder } from '@/strategy/canvas';
 import { registerDecoder } from '@/core/registry';
-import { streamCanvas } from '@/strategy/stream-canvas';
 import fixture from './fixtures/data/pixelift.bmp?url';
+import { StreamCanvasDecoder } from '@/strategy/stream-canvas';
+import { CanvasDecoder } from '@/strategy/canvas';
 
 let blob: Blob | null;
 let stream: ReadableStream<Uint8Array<ArrayBufferLike>> | null;
 let buffer: ArrayBuffer | null;
 
 beforeAll(async () => {
-  registerDecoder(canvasDecoder);
-  registerDecoder(streamCanvas);
+  registerDecoder(new CanvasDecoder());
+  registerDecoder(new StreamCanvasDecoder());
 
   blob = await fetch(fixture).then((res) => res.blob());
   stream = await fetch(fixture).then((res) => res.body);

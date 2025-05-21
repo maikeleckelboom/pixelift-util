@@ -1,8 +1,8 @@
-import { streamToBlob } from '@/utils/stream-to-blob';
+import { blobFromStream } from '@/utils/blob-from-stream';
 import { createControlledStreamController } from '../../test/utils/create-controlled-stream-controller';
 import { createError } from '@/shared/error';
 
-describe('streamToBlob', () => {
+describe('blobFromStream', () => {
   it('converts a stream to a blob with correct contents', async () => {
     const data = new Uint8Array([1, 2, 3, 4, 5, 6]);
     const { stream, pushNext } = createControlledStreamController(data, {
@@ -11,7 +11,7 @@ describe('streamToBlob', () => {
 
     while (await pushNext()) {}
 
-    const blob = await streamToBlob(stream);
+    const blob = await blobFromStream(stream);
     expect(blob.size).toBe(data.byteLength);
     const buffer = await blob.arrayBuffer();
     expect(new Uint8Array(buffer)).toEqual(data);
@@ -26,7 +26,7 @@ describe('streamToBlob', () => {
 
     while (await pushNext()) {}
 
-    const blob = await streamToBlob(stream, { chunkSize: 4 });
+    const blob = await blobFromStream(stream, { chunkSize: 4 });
     const buffer = await blob.arrayBuffer();
     expect(new Uint8Array(buffer)).toEqual(data);
   });
@@ -42,7 +42,7 @@ describe('streamToBlob', () => {
     setTimeout(() => controller.abort(), 15);
 
     await expect(
-      streamToBlob(stream, { signal: controller.signal }),
+      blobFromStream(stream, { signal: controller.signal }),
     ).rejects.toThrow('aborted');
   });
 
@@ -54,7 +54,7 @@ describe('streamToBlob', () => {
 
     while (await pushNext()) {}
 
-    await expect(streamToBlob(stream, { maxBytes: 3 })).rejects.toThrow(
+    await expect(blobFromStream(stream, { maxBytes: 3 })).rejects.toThrow(
       createError.maxBytesExceeded(3, 4).message,
     );
   });
@@ -72,7 +72,7 @@ describe('streamToBlob', () => {
 
     while (await pushNext()) {}
 
-    const blob = await streamToBlob(stream, {
+    const blob = await blobFromStream(stream, {
       onProgress: progressCallback,
     });
     expect(new Uint8Array(await blob.arrayBuffer())).toEqual(data);
@@ -87,7 +87,7 @@ describe('streamToBlob', () => {
     });
     stream.getReader();
 
-    await expect(streamToBlob(stream)).rejects.toThrow(
+    await expect(blobFromStream(stream)).rejects.toThrow(
       'ReadableStream is already locked',
     );
   });
@@ -100,11 +100,11 @@ describe('streamToBlob', () => {
 
     while (await pushNext()) {}
 
-    await expect(streamToBlob(stream, { chunkSize: 0 })).rejects.toThrow(
-      'chunkSize must be positive',
+    await expect(blobFromStream(stream, { chunkSize: 0 })).rejects.toThrow(
+      'chunkSize must be a positive integer',
     );
-    await expect(streamToBlob(stream, { maxBytes: 0 })).rejects.toThrow(
-      'maxBytes must be positive',
+    await expect(blobFromStream(stream, { maxBytes: 0 })).rejects.toThrow(
+      'maxBytes must be a positive integer',
     );
   });
 });

@@ -21,6 +21,13 @@ export class WebCodecsDecoder implements Decoder {
     return decoder.decode(input, options);
   }
 
+  public static isSupported(type: string | undefined): Promise<boolean> {
+    if (!type || typeof ImageDecoder === 'undefined') {
+      return Promise.resolve(false);
+    }
+    return ImageDecoder.isTypeSupported(type);
+  }
+
   public async decode(
     input: DecoderInput,
     options?: DecodeOptions,
@@ -83,13 +90,6 @@ export class WebCodecsDecoder implements Decoder {
     } finally {
       decoder.close();
     }
-  }
-
-  public static isSupported(
-    mimeType: string | undefined,
-  ): boolean | Promise<boolean> {
-    if (!mimeType || typeof ImageDecoder === 'undefined') return false;
-    return ImageDecoder.isTypeSupported(mimeType);
   }
 
   private async frameToPixelData(

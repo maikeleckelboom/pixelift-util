@@ -37,3 +37,16 @@ export interface Decoder {
 }
 
 export type DecoderConstructor = new () => Decoder;
+
+/**
+ * Abstract base class for decoders to extend
+ */
+export abstract class BaseDecoder implements Decoder {
+  abstract readonly name: string;
+  
+  abstract decode(input: DecoderInput, options?: DecodeOptions): Promise<PixelData | PixelData[]>;
+  
+  isSupported(type?: string): boolean | Promise<boolean> {
+    return true;
+  }
+}

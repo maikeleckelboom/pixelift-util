@@ -6,27 +6,21 @@ import type {
   PixelData,
 } from '@/core/types';
 import { isBrowser, isWorker } from '@/shared/env';
-import { streamToBlob } from '@/utils/stream-to-blob';
-import { formatBytes } from '@/utils/math';
+import { blobFromStream } from '@/utils/blob-from-stream';
 
-export const streamCanvas: Decoder = {
-  name: 'stream-canvas',
+export class StreamCanvasDecoder implements Decoder {
+  readonly name = 'stream-canvas';
 
   async decode(
     input: DecoderInput,
     options: DecodeOptions = {},
   ): Promise<PixelData> {
-    const blob = await streamToBlob(input, {
-      ...options,
-      onProgress: (v) => {
-        console.log(`stream-canvas: ${formatBytes(v)} bytes processed`);
-      },
-    });
+    const blob = await blobFromStream(input, options);
 
     return decode(blob, options);
-  },
+  }
 
-  isSupported: () => {
+  isSupported(): boolean {
     return isBrowser() || isWorker();
-  },
-};
+  }
+}
